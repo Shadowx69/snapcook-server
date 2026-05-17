@@ -2,7 +2,6 @@ services:
   - type: web
     name: snapcook-api
     env: node
-    rootDir: AIBackend
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /health
