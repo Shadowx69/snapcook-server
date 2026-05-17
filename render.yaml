@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: snapcook-api
+    env: node
+    rootDir: AIBackend
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: NODE_ENV
+        value: production
+      # Set these secrets in the Render dashboard — do NOT put real values here
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PEXELS_API
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
