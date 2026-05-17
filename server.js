@@ -28,7 +28,7 @@ app.use(helmet());
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? ['https://snapcook.vercel.app', /\.vercel\.app$/]
+    ? ['https://snapcook-topaz.vercel.app', /\.vercel\.app$/]
     : true,
   credentials: true,
 }));
