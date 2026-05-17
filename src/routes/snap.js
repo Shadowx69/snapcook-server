@@ -72,6 +72,23 @@ Return ONLY the JSON array. No explanation, no markdown, no extra text.`,
   return [...new Set(tokens)];
 }
 
+// POST /api/snap/detect — Gemini ingredient detection only, no recipe matching
+router.post('/detect', requireAuth, upload.single('image'), async (req, res) => {
+  let imagePath = null;
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image provided' });
+    imagePath = req.file.path;
+    const ingredients = await detectIngredients(imagePath);
+    console.log(`[snap/detect] Gemini detected ${ingredients.length} ingredients:`, ingredients);
+    res.json({ ingredients });
+  } catch (err) {
+    console.error('[snap/detect] Error:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to analyze image' });
+  } finally {
+    if (imagePath && fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+  }
+});
+
 // POST /api/snap — image-based (Gemini) analysis
 router.post('/', requireAuth, loadPreferences, upload.single('image'), async (req, res) => {
   let imagePath = null;
