@@ -6,7 +6,10 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 async function getAllRecipes() {
   if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
-  cache = await Recipe.find({}, 'title cuisine category time tags ingredients nutrition calories image').lean();
+  cache = await Recipe.find(
+    {},
+    'title cuisine category time difficulty rating reviewCount tags ingredients nutrition calories image gradient servings'
+  ).lean();
   cacheTime = Date.now();
   return cache;
 }
@@ -39,14 +42,16 @@ export async function matchRecipes(userIngredients, { diet, allergies, meal, lim
 
   let pool = recipes;
 
-  // Diet is a hard preference — if the user set vegan/keto/etc., never leak in
-  // recipes that don't match, even at the cost of returning an empty list.
+  // Diet filter — try to honour the preference, but fall back to the full pool
+  // if fewer than 3 recipes match (e.g. the DB wasn't seeded with keto/gluten-free
+  // tags yet).  This mirrors the soft-fallback pattern used for the meal filter.
   if (diet && diet !== 'none') {
     const dietTag = diet.toLowerCase().replace(/[^a-z]/g, '');
-    pool = pool.filter(r =>
+    const dietPool = pool.filter(r =>
       r.tags.some(t => t.toLowerCase().includes(dietTag)) ||
       r.category.some(c => c.toLowerCase().includes(dietTag))
     );
+    if (dietPool.length >= 3) pool = dietPool;
   }
 
   if (allergies && Array.isArray(allergies) && allergies.length > 0) {

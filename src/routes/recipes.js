@@ -19,16 +19,21 @@ router.get('/', requireAuth, loadPreferences, async (req, res) => {
     } = req.query;
 
     const filter = {};
+    // Each entry is a { $or: [...] } block; combined at the end via $and so
+    // multiple "any-of" groups don't overwrite each other.
+    const andConditions = [];
 
     if (cuisine)    filter.cuisine = cuisine.toLowerCase();
     if (category)   filter.category = { $in: [category.toLowerCase()] };
+
     if (tag) {
       const t = tag.toLowerCase();
       if (t === 'one-pot') {
-        filter.$or = [
+        // Recipes explicitly tagged OR whose title suggests a one-pot dish
+        andConditions.push({ $or: [
           { tags: { $in: ['one-pot'] } },
           { title: { $regex: 'soup|stew|curry|biryani|dal|daal|risotto|chowder|casserole|broth|porridge|congee|shakshuka|nihari|haleem|karahi|shorba|pho|ramen|tagine|pilaf|pulao|paella', $options: 'i' } },
-        ];
+        ]});
       } else {
         filter.tags = { $in: [t] };
       }
@@ -38,51 +43,44 @@ router.get('/', requireAuth, loadPreferences, async (req, res) => {
       const c = collection.toLowerCase();
       if (c === 'under-30') {
         filter.time = { $lte: 30 };
-      } else if (c === 'date-night') {
-        filter.$and = [
-          { tags: 'date-night' },
-          { time: { $gte: 60 } },
-          { tags: { $nin: ['kid-friendly', 'budget'] } },
-        ];
-      } else if (c === 'kid-friendly') {
-        filter.tags = 'kid-friendly';
-        filter.difficulty = 'Easy';
-      } else if (c === 'meal-prep') {
-        filter.tags = 'meal-prep';
-        filter.servings = { $gte: 4 };
-      } else if (c === 'comfort') {
-        filter.tags = 'comfort';
-        filter.calories = { $gte: 450 };
-      } else if (c === 'budget') {
-        filter.tags = 'budget';
-        filter.calories = { $lte: 500 };
       } else {
+        // All named collections (date-night, kid-friendly, meal-prep, comfort, budget, …)
+        // are matched purely by their tag — no extra calorie/difficulty/servings gates.
         filter.tags = { $in: [c] };
       }
     }
-    if (maxTime)        filter.time = { $lte: Number(maxTime) };
+
+    if (maxTime)        filter.time     = { $lte: Number(maxTime) };
     if (maxCal)         filter.calories = { $lte: Number(maxCal) };
-    if (maxIngredients) filter.$expr = { $lte: [{ $size: '$ingredients' }, Number(maxIngredients)] };
+    if (maxIngredients) filter.$expr    = { $lte: [{ $size: '$ingredients' }, Number(maxIngredients)] };
     if (minProtein) filter['nutrition.protein'] = { $gte: Number(minProtein) };
-    if (maxCarb)    filter['nutrition.carbs'] = { $lte: Number(maxCarb) };
-    if (maxFat)     filter['nutrition.fat'] = { $lte: Number(maxFat) };
+    if (maxCarb)    filter['nutrition.carbs']   = { $lte: Number(maxCarb) };
+    if (maxFat)     filter['nutrition.fat']     = { $lte: Number(maxFat) };
 
     if (diet && diet !== 'none') {
-      filter.$or = [
+      andConditions.push({ $or: [
         { tags: { $regex: diet, $options: 'i' } },
         { category: { $regex: diet, $options: 'i' } },
-      ];
+      ]});
     }
+
     if (search) {
-      filter.$or = [
+      andConditions.push({ $or: [
         { title: { $regex: search, $options: 'i' } },
         { 'ingredients.name': { $regex: search, $options: 'i' } },
         { cuisine: { $regex: search, $options: 'i' } },
-      ];
+      ]});
     }
 
-    let sortObj = { createdAt: -1 };
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
+    }
+
+    // 'relevant' and the default both rank by rating so the top-rated recipes
+    // float up when no explicit sort is chosen.
+    let sortObj = { rating: -1 };
     if (sort === 'rating')      sortObj = { rating: -1 };
+    if (sort === 'relevant')    sortObj = { rating: -1 };
     if (sort === 'trending')    sortObj = { isTrending: -1, rating: -1 };
     if (sort === 'reviewCount') sortObj = { reviewCount: -1 };
     if (sort === 'newest')      sortObj = { createdAt: -1 };
